@@ -1,76 +1,107 @@
-# MeetLink MVP
+# Jiraly — Project & Issue Tracker (with Meeting Mailer)
 
-A lightweight, no-backend meeting link manager for teams. Built with React + Vite, persisted to `localStorage`.
+A lightweight, single-page Jira-style tracker with a built-in **Meetings** section that auto-generates conference links (Jitsi / Google Meet / Zoom / Teams) and **emails the invitation to attendees through a small Node backend**.
 
-## Features
-- **Email-based sign up / sign in** — first user auto-becomes admin
-- **Create & manage meetings** — title, date/time, host, department, URL, description, tags
-- **Search & filter** — full-text search + tag filters + date picker
-- **Shareable links** — encode any meeting as a base64 URL parameter
-- **Role-based access** — admins can edit/delete all meetings; members only their own
+## Stack
 
-## Quick Start
+| Layer    | Tech                                       |
+| -------- | ------------------------------------------ |
+| Frontend | React 18 + Vite (single `App.jsx`)         |
+| Backend  | Express + Nodemailer (`server/index.js`)   |
+| Storage  | `localStorage` (no DB)                     |
+
+## Quick start
 
 ```bash
-# 1. Install dependencies
+# 1. Install everything
 npm install
 
-# 2. Start the dev server
-npm run dev
+# 2. Configure mail
+cp .env.example .env
+#   then edit .env and fill in SMTP_USER / SMTP_PASS
 
-# 3. Open http://localhost:5173
-#    Sign up — the first account created becomes admin.
+# 3. Run frontend + backend together
+npm run dev:all
 ```
 
-## Build for Production
+- Web UI: <http://localhost:5173>
+- Mail API: <http://localhost:5174/api/health>
 
-```bash
-npm run build
-# Output in /dist — deploy to Vercel, Netlify, or any static host
+The Vite dev server proxies `/api/*` → `http://localhost:5174`, so the frontend just calls `fetch('/api/send-invite', …)`.
+
+## SMTP setup
+
+The backend uses **any standard SMTP provider** — pick one and put the credentials in `.env`:
+
+### Gmail
+1. Turn on 2-Step Verification: <https://myaccount.google.com/security>
+2. Create an **App password**: <https://myaccount.google.com/apppasswords>
+3. Use it as `SMTP_PASS` (your normal Google password will NOT work).
+
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=you@gmail.com
+SMTP_PASS=xxxx xxxx xxxx xxxx
+MAIL_FROM="Jiraly <you@gmail.com>"
 ```
 
-## Project Structure
+### Mailtrap (best for local testing — emails are caught, never delivered)
+```
+SMTP_HOST=sandbox.smtp.mailtrap.io
+SMTP_PORT=2525
+SMTP_USER=<from your inbox>
+SMTP_PASS=<from your inbox>
+```
+
+### SendGrid
+```
+SMTP_HOST=smtp.sendgrid.net
+SMTP_PORT=587
+SMTP_USER=apikey
+SMTP_PASS=<your SendGrid API key>
+```
+
+## Scripts
+
+| Script             | What it does                                                |
+| ------------------ | ----------------------------------------------------------- |
+| `npm run dev`      | Vite frontend only (port 5173)                              |
+| `npm run server`   | Express mail backend only (port 5174)                       |
+| `npm run dev:all`  | Both, in parallel (recommended)                             |
+| `npm run build`    | Production frontend build                                   |
+| `npm run preview`  | Preview the built frontend                                  |
+
+## How emails work
+
+1. User schedules a meeting with one or more attendees in the **📅 Meetings** view.
+2. On save, the frontend POSTs to `/api/send-invite` with the meeting payload.
+3. The backend builds an HTML + plain-text email **with a `.ics` calendar attachment** and sends it via your configured SMTP.
+4. Attendees receive a real email they can RSVP from / add to their calendar.
+5. If the mail server is unreachable, the UI falls back to opening a `mailto:` link in the user's local mail client.
+
+There is also a **✉ Send invite** button on each meeting card to re-send at any time, plus **📆 Add to calendar** for a local `.ics` download.
+
+## Project layout
 
 ```
-meetlink-mvp/
-├── index.html          # HTML shell
-├── vite.config.js      # Vite + React plugin config
-├── package.json
+.
+├── index.html
+├── package.json          ← scripts, frontend + backend deps
+├── vite.config.js        ← /api proxy to localhost:5174
+├── .env.example          ← copy → .env and fill in SMTP creds
+├── server/
+│   └── index.js          ← Express + Nodemailer mail API
 └── src/
-    ├── main.jsx        # React root + localStorage polyfill
-    └── App.jsx         # Entire app (Auth, Dashboard, Editor, Cards)
+    ├── main.jsx
+    └── App.jsx           ← all UI, all state
 ```
 
-## Storage
+## First run
 
-Data is stored in `localStorage` under these keys:
-| Key          | Contents                        |
-|--------------|---------------------------------|
-| `ml:users`   | Array of registered users       |
-| `ml:session` | Current logged-in user session  |
-| `ml:meetings`| Array of all meeting objects    |
+The first time you load the app it auto-seeds:
+- 2 sample projects (`MAR`, `WEB`)
+- 10 sample issues across To Do / In Progress / In Review / Done
+- 3 sample meetings (today, tomorrow, in 3 days)
 
-Passwords are hashed (djb2) before storage — never stored in plain text.
-
-## Shareable Links
-
-Clicking **Copy link** on any meeting card copies a URL like:
-```
-https://your-app.com/?ml=eyJ0aXRsZSI6...
-```
-The `ml` parameter is a base64-encoded JSON blob of the meeting object. Anyone with the link can decode it without logging in.
-
-## Upgrading Beyond MVP
-
-| Concern        | Suggested upgrade                              |
-|----------------|------------------------------------------------|
-| Persistence    | Node.js + PostgreSQL / Supabase                |
-| Auth           | NextAuth.js, Auth0, or SAML/LDAP via Passport  |
-| Email          | Nodemailer + SendGrid for link distribution    |
-| Reminders      | Cron job (node-cron) + email notifications     |
-| Audit log      | Server-side middleware logging access events   |
-| Deployment     | Vercel (static) → Railway/Fly.io (with backend)|
-
-## License
-
-MIT
+The first user you sign up becomes the **admin**. Subsequent sign-ups are members.
