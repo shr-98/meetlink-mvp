@@ -279,14 +279,19 @@ def send_email(
     text_body: str,
     html_body: str,
     ics_body: str,
+    from_display_name: str | None = None,
+    reply_to: str | None = None,
 ) -> str:
     """Send a multipart/alternative email with an .ics calendar invite."""
     msg = EmailMessage()
     from_name, from_addr = parse_from(MAIL_FROM)
-    msg["From"] = formataddr((from_name or "Jiraly", from_addr))
+    display_name = (from_display_name or from_name or "Jiraly").strip()
+    msg["From"] = formataddr((display_name, from_addr))
     msg["To"] = ", ".join(to_list)
     msg["Subject"] = subject
     msg["Message-ID"] = make_msgid(domain="jiraly")
+    if reply_to and is_email(reply_to):
+        msg["Reply-To"] = reply_to
 
     msg.set_content(text_body)
     msg.add_alternative(html_body, subtype="html")
@@ -405,6 +410,11 @@ def send_invite():
     when = start.strftime("%a, %b %d, %Y, %I:%M %p")
     provider_label = m.get("providerLabel") or m.get("provider") or "Online"
 
+    # Use the meeting host's name as the From display name so recipients see
+    # "Shrey Sharma <sharmashrey0004@gmail.com>" instead of a generic label.
+    organizer_name = (m.get("host") or "").strip() or None
+    organizer_email = (m.get("hostEmail") or "").strip() or None
+
     try:
         message_id = send_email(
             to_list=recipients,
@@ -412,6 +422,8 @@ def send_invite():
             text_body=build_text(m, when, provider_label),
             html_body=build_html(m, when, provider_label),
             ics_body=build_ics(m),
+            from_display_name=organizer_name,
+            reply_to=organizer_email,
         )
     except smtplib.SMTPAuthenticationError as e:
         print(f"[send-invite] AUTH FAILED: {e}")

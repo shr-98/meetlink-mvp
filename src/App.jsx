@@ -2841,6 +2841,7 @@ function MeetingModal({ meeting, users, session, onSave, onClose }) {
     time:        meeting.time || "10:00",
     duration:    meeting.duration || 30,
     host:        meeting.host || session.name,
+    hostEmail:   meeting.hostEmail || session.email,
     provider:    meeting.provider || "jitsi",
     meetingUrl:  meeting.meetingUrl || "",
     attendees:   meeting.attendees || [],
