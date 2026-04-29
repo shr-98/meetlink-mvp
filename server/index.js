@@ -10,8 +10,10 @@ app.use(express.json({ limit: "1mb" }));
 const PORT      = process.env.PORT || 5179;
 const SMTP_HOST = process.env.SMTP_HOST;
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
-const SMTP_USER = process.env.SMTP_USER;
-const SMTP_PASS = process.env.SMTP_PASS;
+const SMTP_USER = (process.env.SMTP_USER || "").trim();
+// Gmail App Passwords are shown as "abcd efgh ijkl mnop" — strip spaces so
+// users can paste either form. Also trims accidental surrounding whitespace.
+const SMTP_PASS = (process.env.SMTP_PASS || "").replace(/\s+/g, "");
 const FROM      = process.env.MAIL_FROM || `"Jiraly" <${SMTP_USER}>`;
 
 if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
@@ -149,8 +151,9 @@ app.post("/api/send-invite", async (req, res) => {
     console.log(`[server] ✉ Sent "${m.title}" → ${recipients.join(", ")} (id=${info.messageId})`);
     res.json({ ok: true, messageId: info.messageId, sentTo: recipients });
   } catch (err) {
-    console.error("[send-invite]", err);
-    res.status(500).json({ ok: false, error: err.message || String(err) });
+    console.error("[send-invite] FAILED:", err);
+    const msg = err?.response || err?.message || String(err) || "Unknown mail error";
+    res.status(500).json({ ok: false, error: `SMTP: ${msg}`, code: err?.code });
   }
 });
 
