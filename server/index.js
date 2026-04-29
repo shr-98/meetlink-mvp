@@ -157,6 +157,65 @@ app.post("/api/send-invite", async (req, res) => {
   }
 });
 
+// ─── OTP email ────────────────────────────────────────────────────────────
+function buildOtpEmail(code, purpose, name) {
+  const isSignup = purpose === "signup";
+  const title  = isSignup ? "Verify your email" : "Reset your password";
+  const intro  = isSignup
+    ? "Welcome to Jiraly! Use the code below to finish creating your account."
+    : "We received a request to reset your password. Use the code below to continue.";
+  const subject = `${code} is your Jiraly verification code`;
+  const safeName = escHtml(name || "there");
+  const digits = [...code].map(d =>
+    `<span style="display:inline-block;min-width:36px;padding:10px 4px;margin:0 3px;font-family:SFMono-Regular,Menlo,monospace;font-size:24px;font-weight:700;color:#0052CC;background:#DEEBFF;border-radius:6px;letter-spacing:2px">${d}</span>`
+  ).join("");
+  const text = [
+    `Hi ${name || "there"},`, "", intro, "",
+    `Your verification code: ${code}`, "",
+    "This code expires in 10 minutes. If you didn't request it, you can ignore this email.",
+    "", "— Jiraly",
+  ].join("\n");
+  const html = `
+  <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:520px;margin:0 auto;color:#172B4D">
+    <div style="background:#0052CC;color:#fff;padding:20px 22px;border-radius:6px 6px 0 0">
+      <div style="font-size:12px;opacity:0.85;text-transform:uppercase;letter-spacing:0.5px">Jiraly</div>
+      <div style="font-size:20px;font-weight:600;margin-top:4px">${escHtml(title)}</div>
+    </div>
+    <div style="background:#fff;border:1px solid #DFE1E6;border-top:none;border-radius:0 0 6px 6px;padding:24px">
+      <p style="margin:0 0 14px;font-size:14px;line-height:1.55">Hi ${safeName},</p>
+      <p style="margin:0 0 18px;font-size:14px;line-height:1.55;color:#42526E">${escHtml(intro)}</p>
+      <div style="text-align:center;margin:22px 0">${digits}</div>
+      <p style="margin:0;font-size:12px;color:#6B778C;line-height:1.55">
+        This code expires in <strong>10 minutes</strong>. If you didn't request it,
+        you can safely ignore this email.
+      </p>
+      <div style="margin-top:22px;padding-top:14px;border-top:1px solid #DFE1E6;font-size:11px;color:#97A0AF">
+        Sent automatically from Jiraly · Please do not reply.
+      </div>
+    </div>
+  </div>`;
+  return { subject, text, html };
+}
+
+app.post("/api/send-otp", async (req, res) => {
+  try {
+    const { email, code, purpose = "verify", name } = req.body || {};
+    if (!isEmail(email))                    return res.status(400).json({ ok: false, error: "A valid email is required" });
+    if (!/^\d{4,8}$/.test(code || ""))      return res.status(400).json({ ok: false, error: "Invalid OTP code" });
+    if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
+      return res.status(500).json({ ok: false, error: "SMTP not configured on server. Set SMTP_HOST, SMTP_USER, SMTP_PASS in .env" });
+    }
+    const { subject, text, html } = buildOtpEmail(code, purpose, name);
+    const info = await transporter.sendMail({ from: FROM, to: email, subject, text, html });
+    console.log(`[server] 🔐 OTP (${purpose}) sent → ${email} (id=${info.messageId})`);
+    res.json({ ok: true, sentTo: email });
+  } catch (err) {
+    console.error("[send-otp] FAILED:", err);
+    const msg = err?.response || err?.message || String(err);
+    res.status(500).json({ ok: false, error: `SMTP: ${msg}`, code: err?.code });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`[server] Jiraly mail API listening on http://localhost:${PORT}`);
 });

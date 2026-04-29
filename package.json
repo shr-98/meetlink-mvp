@@ -7,8 +7,11 @@
   "scripts": {
     "dev": "vite",
     "server": "node server/index.js",
-    "server:py": "cd server_py && (./.venv/bin/python app.py 2>/dev/null || python3 app.py)",
+    "server:py": "cd server_py && ./.venv/bin/python app.py",
     "server:py:setup": "cd server_py && python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt",
+    "freeports": "lsof -ti :5173 -ti :5179 | xargs kill -9 2>/dev/null; true",
+    "predev:all": "npm run freeports",
+    "predev:py": "npm run freeports",
     "dev:all": "concurrently -k -n web,api -c blue,magenta \"npm:dev\" \"npm:server\"",
     "dev:py": "concurrently -k -n web,api -c blue,green \"npm:dev\" \"npm:server:py\"",
     "build": "vite build",
