@@ -54,11 +54,22 @@ const api = (() => {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   });
   const call = async (path, opts = {}) => {
-    const res = await fetch(`/api${path}`, { headers: headers(), ...opts });
+    let res;
+    try {
+      res = await fetch(`/api${path}`, { headers: headers(), ...opts });
+    } catch {
+      const err = new Error("Cannot reach the API server. Start it with npm run dev:py.");
+      err.status = 0;
+      throw err;
+    }
     let data = {};
     try { data = await res.json(); } catch { /* non-JSON */ }
     if (!res.ok || data.ok === false) {
-      const err = new Error(data.error || `Request failed (${res.status})`);
+      let message = data.error;
+      if (!message && res.status >= 500) {
+        message = "API server unavailable. Start it with npm run dev:py.";
+      }
+      const err = new Error(message || `Request failed (${res.status})`);
       err.status = res.status;
       throw err;
     }
